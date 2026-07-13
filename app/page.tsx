@@ -11,6 +11,7 @@ type Task = {
 type SavedState = {
   date: string;
   tasks: Task[];
+  bingoHistory?: string[];
 };
 
 type BoardSlot = {
@@ -28,6 +29,28 @@ function localDateKey() {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function formatHistoryDate(dateKey: string) {
+  const date = new Date(`${dateKey}T00:00:00`);
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  }).format(date);
+}
+
+function bingoCelebrationMessage(lineCount: number, allTasksCompleted: boolean) {
+  if (allTasksCompleted) return "太厉害了，今天所有任务都完成了！";
+  if (lineCount <= 1) return "今天已经做完一整条线了！";
+
+  const chineseNumbers = [
+    "零", "一", "二", "三", "四", "五", "六", "七", "八", "九",
+    "十", "十一", "十二", "十三", "十四",
+  ];
+  const countLabel = chineseNumbers[lineCount] ?? String(lineCount);
+  return `今天已经做完整整${countLabel}条线了！`;
 }
 
 function boardSizeFor(taskCount: number) {
@@ -111,8 +134,11 @@ export default function Home() {
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState("");
   const [showBingo, setShowBingo] = useState(false);
+  const [bingoHistory, setBingoHistory] = useState<string[]>([]);
+  const [activePanel, setActivePanel] = useState<"tasks" | null>(null);
   const previousBingoCount = useRef(0);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Device-local data is restored after the browser mounts. */
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -127,6 +153,11 @@ export default function Home() {
             }))
           : [];
         setTasks(restored);
+        setBingoHistory(
+          Array.isArray(parsed.bingoHistory)
+            ? parsed.bingoHistory.filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+            : [],
+        );
       }
     } catch {
       setMessage("旧数据读取失败，可以重新添加任务。");
@@ -134,12 +165,13 @@ export default function Home() {
       setReady(true);
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (!ready) return;
-    const state: SavedState = { date: localDateKey(), tasks };
+    const state: SavedState = { date: localDateKey(), tasks, bingoHistory };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [ready, tasks]);
+  }, [bingoHistory, ready, tasks]);
 
   const size = boardSizeFor(tasks.length);
   const canShowBoard = tasks.length >= MIN_TASKS;
@@ -149,6 +181,7 @@ export default function Home() {
   );
   const lines = useMemo(() => getLines(size), [size]);
   const completedCount = tasks.filter((task) => task.completed).length;
+  const allTasksCompleted = canShowBoard && completedCount === tasks.length;
   const progress = canShowBoard
     ? Math.min(100, Math.round((completedCount / size) * 100))
     : 0;
@@ -167,7 +200,13 @@ export default function Home() {
   );
 
   useEffect(() => {
-    if (winningLines.length > previousBingoCount.current) setShowBingo(true);
+    if (winningLines.length > previousBingoCount.current) {
+      setShowBingo(true);
+      const today = localDateKey();
+      setBingoHistory((current) =>
+        current.includes(today) ? current : [today, ...current].slice(0, 366),
+      );
+    }
     previousBingoCount.current = winningLines.length;
   }, [winningLines.length]);
 
@@ -215,20 +254,27 @@ export default function Home() {
 
   return (
     <main className="app-shell">
+      <p className="site-title">ADHD，目标已落地</p>
       <header className="topbar">
         <div>
           <p className="eyebrow">DAILY BINGO</p>
           <h1>今天，做一点就很好。</h1>
         </div>
-        <div className="date-badge" aria-label="今天">
-          <span>{new Intl.DateTimeFormat("zh-CN", { month: "short" }).format(new Date())}</span>
-          <strong>{new Date().getDate()}</strong>
+        <div className="topbar-actions">
+          <a className="mode-switch" href="./final-call/">
+            <span>帮你</span>
+            <span>选择</span>
+          </a>
+          <div className="date-badge" aria-label="今天">
+            <span>{new Intl.DateTimeFormat("zh-CN", { month: "short" }).format(new Date())}</span>
+            <strong>{new Date().getDate()}</strong>
+          </div>
         </div>
       </header>
 
       <section className="progress-card" aria-labelledby="progress-title">
         <div className="progress-copy">
-          <div>
+          <div className="progress-title-line">
             <p id="progress-title">今日进度</p>
             <strong>
               {canShowBoard ? `${completedCount} / ${size}` : "等待任务"}
@@ -245,27 +291,28 @@ export default function Home() {
         >
           <div className="progress-fill" style={{ width: `${progress}%` }} />
         </div>
-        <p className="progress-note">
-          {canShowBoard
-            ? progress >= 100
-              ? "进度已满，剩下的都是额外惊喜。"
-              : `完成 ${size} 个不同任务，今日进度就满格。`
-            : `再添加 ${tasksNeeded} 个任务，就可以开始。`}
-        </p>
       </section>
 
-      {canShowBoard ? (
-        <section className="board-section" aria-labelledby="board-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">{size} × {size} BOARD</p>
-              <h2 id="board-title">任务棋盘</h2>
-            </div>
-            <span className={winningLines.length ? "bingo-pill active" : "bingo-pill"}>
-              {winningLines.length ? `BINGO × ${winningLines.length}` : "连成一线即 BINGO"}
-            </span>
+      <section className={`board-section${canShowBoard ? "" : " board-empty"}`} aria-labelledby="board-title">
+        <div className="section-heading board-toolbar">
+          <div>
+            <p className="eyebrow">{canShowBoard ? `${size} × ${size} BOARD` : "YOUR BOARD"}</p>
+            <h2 id="board-title">任务棋盘</h2>
           </div>
+          <div className="board-tools" aria-label="棋盘工具">
+            {canShowBoard && (
+              <span className={winningLines.length ? "bingo-pill active" : "bingo-pill"}>
+                {winningLines.length ? `BINGO × ${winningLines.length}` : "连成一线即 BINGO"}
+              </span>
+            )}
+            <button type="button" onClick={() => setActivePanel("tasks")}>
+              任务 <span>{tasks.length}</span>
+            </button>
+          </div>
+        </div>
 
+        {canShowBoard ? (
+          <>
           <div
             className={`bingo-grid size-${size}`}
             style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
@@ -286,21 +333,61 @@ export default function Home() {
             ))}
           </div>
           <p className="board-hint">轻点格子完成任务，再点一次即可取消。重复格会同步变化。</p>
-        </section>
-      ) : (
-        <section className="empty-board" aria-labelledby="empty-title">
+          </>
+        ) : (
+          <div className="empty-board-content">
           <div className="empty-grid" aria-hidden="true">
             {Array.from({ length: 9 }, (_, index) => <span key={index} />)}
           </div>
           <div>
-            <p className="eyebrow">YOUR BOARD</p>
             <h2 id="empty-title">先放进 5 件想做的事</h2>
-            <p>棋盘会根据任务数量自动变成 3×3、4×4、5×5 或 6×6。</p>
+            <p>还需添加 {tasksNeeded} 个任务。</p>
+            <button type="button" className="empty-add-button" onClick={() => setActivePanel("tasks")}>
+              添加任务
+            </button>
           </div>
-        </section>
-      )}
+          </div>
+        )}
+      </section>
 
-      <section className="task-editor" aria-labelledby="task-editor-title">
+      <section className="history-card" aria-labelledby="history-title">
+        <div className="section-heading history-heading">
+          <div>
+            <p className="eyebrow">BINGO HISTORY</p>
+            <h2 id="history-title">完成记录</h2>
+          </div>
+          <span className="history-count">{bingoHistory.length} 天</span>
+        </div>
+        {bingoHistory.length ? (
+          <ul className="history-list">
+            {bingoHistory.map((date, index) => (
+              <li key={date}>
+                <span className="history-dot" aria-hidden="true">{index === 0 ? "★" : "✓"}</span>
+                <span>{formatHistoryDate(date)}</span>
+                {date === localDateKey() && <strong>今天</strong>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="history-empty">第一次连成一条线后，日期会自动出现在这里。</p>
+        )}
+      </section>
+
+      {activePanel && (
+        <div className="panel-backdrop" role="presentation" onClick={() => setActivePanel(null)}>
+          <aside
+            className="panel-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-editor-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-sheet-top">
+              <span aria-hidden="true" />
+              <button type="button" aria-label="关闭" onClick={() => setActivePanel(null)}>×</button>
+            </div>
+
+      <section className="task-editor panel-content" aria-labelledby="task-editor-title">
         <div className="section-heading editor-heading">
           <div>
             <p className="eyebrow">TASKS</p>
@@ -352,8 +439,9 @@ export default function Home() {
           <p className="no-tasks">这里还是空的。写下第一件小事吧。</p>
         )}
       </section>
-
-      <footer>任务仅保存在当前设备 · 每天自动重新开始</footer>
+          </aside>
+        </div>
+      )}
 
       {showBingo && (
         <div className="modal-backdrop" role="presentation" onClick={() => setShowBingo(false)}>
@@ -367,8 +455,8 @@ export default function Home() {
             <div className="modal-burst" aria-hidden="true">✦</div>
             <p className="eyebrow">NICE WORK</p>
             <h2 id="bingo-title">BINGO!</h2>
-            <p>你连成了一条线。今天已经很有进展了。</p>
-            <button type="button" onClick={() => setShowBingo(false)}>继续就好</button>
+            <p>{bingoCelebrationMessage(winningLines.length, allTasksCompleted)}</p>
+            <button type="button" onClick={() => setShowBingo(false)}>继续</button>
           </section>
         </div>
       )}

@@ -1,35 +1,18 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = host.startsWith("localhost") || host.startsWith("127.0.0.1")
-    ? "http"
-    : "https";
-  const socialImage = `${protocol}://${host}/og.png`;
+const faviconPath = process.env.GITHUB_PAGES === "true"
+  ? "/jan-personal/favicon.svg?v=2"
+  : "/favicon.svg?v=2";
 
-  return {
-    title: "每日任务 Bingo",
-    description: "把今天的小任务放进 Bingo 棋盘，完成一线就很好。",
-    icons: {
-      icon: "/favicon.svg",
-      shortcut: "/favicon.svg",
-    },
-    openGraph: {
-      title: "每日任务 Bingo",
-      description: "今天，做一点就很好。",
-      images: [{ url: socialImage, width: 1536, height: 1024 }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: "每日任务 Bingo",
-      description: "今天，做一点就很好。",
-      images: [socialImage],
-    },
-  };
-}
+export const metadata: Metadata = {
+  title: "ADHD，目标已落地",
+  description: "用任务连线推进今天的小目标，用 Final Call 帮你摆脱选择困难。",
+  icons: {
+    icon: [{ url: faviconPath, type: "image/svg+xml", sizes: "any" }],
+    shortcut: faviconPath,
+  },
+};
 
 export default function RootLayout({
   children,
