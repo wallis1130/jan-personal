@@ -97,7 +97,7 @@ button {
   min-height: 69px;
   grid-auto-flow: row;
   align-content: center;
-  row-gap: 0;
+  row-gap: 2px;
   place-items: center;
   border: 1.5px solid var(--ink);
   border-radius: 14px;
@@ -107,7 +107,7 @@ button {
   padding: 0 12px;
   font-size: 0.96rem;
   font-weight: 900;
-  line-height: 0.94;
+  line-height: 1.05;
   letter-spacing: 0.04em;
   text-align: center;
   text-decoration: none;
@@ -230,6 +230,11 @@ h2 {
   border-radius: inherit;
   background: repeating-linear-gradient(-45deg, var(--lime) 0 10px, #c8ef5d 10px 20px);
   transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.progress-fill.complete {
+  border-right-color: var(--purple-dark);
+  background: var(--purple);
 }
 
 .board-hint,

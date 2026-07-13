@@ -289,7 +289,10 @@ export default function Home() {
           aria-valuemax={100}
           aria-valuenow={progress}
         >
-          <div className="progress-fill" style={{ width: `${progress}%` }} />
+          <div
+            className={`progress-fill${progress === 100 ? " complete" : ""}`}
+            style={{ width: `${progress}%` }}
+          />
         </div>
       </section>
 

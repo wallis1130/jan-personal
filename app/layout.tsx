@@ -1,10 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 const assetPrefix = process.env.GITHUB_PAGES === "true" ? "/jan-personal" : "";
 const faviconSvg = `${assetPrefix}/favicon.svg?v=3`;
 const faviconPng = `${assetPrefix}/favicon-32x32.png?v=3`;
 const appleTouchIcon = `${assetPrefix}/apple-touch-icon.png?v=3`;
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
 
 export const metadata: Metadata = {
   title: "ADHD，目标已落地",
