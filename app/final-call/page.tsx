@@ -18,16 +18,30 @@ type SavedDecisionState = {
   categories: DecisionCategory[];
   selectedCategoryId?: string;
   confirmedChoice?: Choice | null;
+  defaultsVersion?: number;
 };
 
 const STORAGE_KEY = "final-call-state-v1";
+const BINGO_STORAGE_KEY = "daily-bingo-state-v1";
+const BINGO_IMPORT_CATEGORY_ID = "bingo-unfinished";
+const BINGO_IMPORT_CATEGORY_NAME = "先做哪一个？";
+const DEFAULTS_VERSION = 2;
 const DEFAULT_CATEGORIES: DecisionCategory[] = [
+  { id: BINGO_IMPORT_CATEGORY_ID, name: BINGO_IMPORT_CATEGORY_NAME, options: [] },
   { id: "food", name: "今天吃什么？", options: [] },
   { id: "shows", name: "今天看什么剧？", options: [] },
 ];
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function localDateKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default function FinalCallPage() {
@@ -52,7 +66,7 @@ export default function FinalCallPage() {
       if (saved) {
         const parsed = JSON.parse(saved) as SavedDecisionState;
         if (Array.isArray(parsed.categories)) {
-          const restored = parsed.categories
+          let restored = parsed.categories
             .filter((category) => category && typeof category.name === "string")
             .map((category) => ({
               id: String(category.id || createId()),
@@ -62,10 +76,29 @@ export default function FinalCallPage() {
                 : [],
             }))
             .filter((category) => category.name);
+
+          let restoredSelectedId = parsed.selectedCategoryId ? String(parsed.selectedCategoryId) : "";
+          if (parsed.defaultsVersion !== DEFAULTS_VERSION) {
+            const existingImportCategory = restored.find(
+              (category) => category.id === BINGO_IMPORT_CATEGORY_ID || category.name === BINGO_IMPORT_CATEGORY_NAME,
+            );
+            if (existingImportCategory) {
+              restored = [
+                { ...existingImportCategory, id: BINGO_IMPORT_CATEGORY_ID },
+                ...restored.filter((category) => category !== existingImportCategory),
+              ];
+              if (restoredSelectedId === existingImportCategory.id) {
+                restoredSelectedId = BINGO_IMPORT_CATEGORY_ID;
+              }
+            } else {
+              restored = [DEFAULT_CATEGORIES[0], ...restored];
+            }
+          }
+
           setCategories(restored);
           setSelectedCategoryId(
-            restored.some((category) => category.id === parsed.selectedCategoryId)
-              ? String(parsed.selectedCategoryId)
+            restored.some((category) => category.id === restoredSelectedId)
+              ? restoredSelectedId
               : restored[0]?.id ?? "",
           );
         }
@@ -81,7 +114,12 @@ export default function FinalCallPage() {
 
   useEffect(() => {
     if (!ready) return;
-    const state: SavedDecisionState = { categories, selectedCategoryId, confirmedChoice };
+    const state: SavedDecisionState = {
+      categories,
+      selectedCategoryId,
+      confirmedChoice,
+      defaultsVersion: DEFAULTS_VERSION,
+    };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [categories, confirmedChoice, ready, selectedCategoryId]);
 
@@ -122,6 +160,52 @@ export default function FinalCallPage() {
     });
     if (drawnChoice?.categoryId === id) setDrawnChoice(null);
     if (confirmedChoice?.categoryId === id) setConfirmedChoice(null);
+  }
+
+  function importUnfinishedBingoTasks() {
+    if (selectedCategory?.id !== BINGO_IMPORT_CATEGORY_ID) return;
+
+    let options: string[] = [];
+    let importFailed = false;
+    try {
+      const saved = window.localStorage.getItem(BINGO_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as {
+          date?: string;
+          tasks?: Array<{ title?: unknown; completed?: unknown }>;
+        };
+        const isToday = parsed.date === localDateKey();
+        if (Array.isArray(parsed.tasks)) {
+          options = parsed.tasks
+            .filter((task) => typeof task?.title === "string" && (!isToday || !task.completed))
+            .map((task) => String(task.title).trim())
+            .filter(Boolean);
+        }
+      }
+    } catch {
+      importFailed = true;
+    }
+
+    setCategories((current) =>
+      current.map((category) =>
+        category.id === BINGO_IMPORT_CATEGORY_ID ? { ...category, options } : category,
+      ),
+    );
+    setOptionDraft("");
+    setEditingOption(null);
+    setDrawnChoice((current) =>
+      current?.categoryId === BINGO_IMPORT_CATEGORY_ID ? null : current,
+    );
+    setConfirmedChoice((current) =>
+      current?.categoryId === BINGO_IMPORT_CATEGORY_ID ? null : current,
+    );
+    setMessage(
+      importFailed
+        ? "BINGO 任务读取失败，当前类别已清空。"
+        : options.length > 0
+          ? `已导入 ${options.length} 个未完成任务。`
+          : "BINGO 暂时没有未完成任务，当前类别已清空。",
+    );
   }
 
   function startCategoryEdit() {
@@ -333,9 +417,16 @@ export default function FinalCallPage() {
                 <button className="edit-text-button" type="button" onClick={startCategoryEdit}>修改</button>
               </div>
             </div>
-            <button className="delete-category" type="button" onClick={() => removeCategory(selectedCategory.id)}>
-              删除类别
-            </button>
+            <div className="category-actions">
+              {selectedCategory.id === BINGO_IMPORT_CATEGORY_ID && (
+                <button className="delete-category" type="button" onClick={importUnfinishedBingoTasks}>
+                  一键导入
+                </button>
+              )}
+              <button className="delete-category" type="button" onClick={() => removeCategory(selectedCategory.id)}>
+                删除类别
+              </button>
+            </div>
           </div>
 
           {editingCategoryId === selectedCategory.id && (

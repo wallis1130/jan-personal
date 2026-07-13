@@ -802,6 +802,12 @@ h2 {
   font-weight: 800;
 }
 
+.category-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .editable-title-row {
   display: flex;
   align-items: center;
