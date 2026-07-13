@@ -11,6 +11,8 @@ await cp(new URL("../dist/client/assets/", import.meta.url), new URL("assets/", 
   recursive: true,
 });
 await cp(new URL("../dist/client/favicon.svg", import.meta.url), new URL("favicon.svg", output));
+await cp(new URL("../dist/client/favicon-32x32.png", import.meta.url), new URL("favicon-32x32.png", output));
+await cp(new URL("../dist/client/apple-touch-icon.png", import.meta.url), new URL("apple-touch-icon.png", output));
 
 const { default: worker } = await import(workerUrl.href);
 

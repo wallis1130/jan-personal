@@ -30,7 +30,8 @@ test("renders the Daily Bingo route with production metadata", async () => {
   const html = await response.text();
   assert.match(html, /<html lang="zh-CN">/i);
   assert.match(html, /<title>ADHD，目标已落地<\/title>/i);
-  assert.match(html, /favicon\.svg\?v=2/i);
+  assert.match(html, /favicon-32x32\.png\?v=3/i);
+  assert.match(html, /apple-touch-icon\.png\?v=3/i);
   assert.match(html, /正在打开今天的任务/);
 });
 
